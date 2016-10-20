@@ -242,11 +242,11 @@ module Mt940_50
   
   ## Appends a line to a file
   def append_line_to_file(line, file)
-    File.open(file, 'a+') { |file| file.write(line) } end  
+    File.open(file, 'a+') { |file| file.write(line) }  
   end
   
   ## Converts supplied values to swift MT equivalents for dates, amounts 
-  def conver_values(xline, dtf_)
+  def convert_values(xline, dtf_)
     xline.each_with_index do |val, idx|
       case idx
       when 11, 21, 5, 6, 17, 18
@@ -265,14 +265,16 @@ module Mt940_50
         else # YYYYMMDD
           val = val[2..3] + val[5..6] + val[8..9]
         end
-        when 16, 21, 26
-          if !val || val.gsub(' ', '') == ''
-            val = ''
-          end
+      when 16, 21, 26
+        if !val || val.gsub(' ', '') == ''
+          val = ''
+        end
       end
     end
     
-    return(xline)
+    return xline
   
   end
+  
+  module_function :gen_mt9
 end
