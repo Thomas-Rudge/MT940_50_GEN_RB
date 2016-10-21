@@ -67,7 +67,7 @@ module MT940_50
     # mur         : Message User Reference
     # {5: Trailer Block ---------------------------------------------
     # chk         : The checksum for the message.
-    if source_file and not File.file?(source_file)
+    if !source_file || !target_file || !File.file?(source_file)
       return false
     end
 
