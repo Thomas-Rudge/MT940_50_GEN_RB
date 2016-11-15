@@ -3,28 +3,7 @@ require 'csv'
 module MT940_50
   extend self
   ## Converts csv to swift MT9 cash statement message
-  def gen_mt9(source_file,
-              target_file,
-              msg_type='950',
-              dtf='DDMMYYYY',
-              # Basic Header Block
-              appid='A',
-              servid='21',
-              session_no='0000',
-              seqno='000000',
-              # Application Header Block
-              drctn='I',
-              msg_prty='N',
-              dlvt_mnty='',
-              obs='',
-              inp_time='0000',
-              out_date='010101',
-              out_time='1200',
-              mir=true,
-              # User Header Block
-              f113=false,
-              mur='MT940950GEN',
-              chk=false)
+  def gen_mt9(source_file, target_file, options={})=
     # CSV --> MT940/50
 
     # All arguments must be strings.
@@ -71,6 +50,31 @@ module MT940_50
       return false
     end
 
+    default = {
+      msg_type: '950',
+      dtf: 'DDMMYYYY',
+      # Basic Header Block
+      appid: 'A',
+      servid: '21',
+      session_no: '0000',
+      seqno: '000000',
+      # Application Header Block
+      drctn: 'I',
+      msg_prty: 'N',
+      dlv_mnty: '',
+      obs: '',
+      inp_time: '0000',
+      out_date: '010101',
+      out_time: '1200',
+      mir: true,
+      # User Header Block
+      f113: false,
+      mur: 'MT940950GEN',
+      chk: false
+      }
+
+    options = default.merge(options)
+
     trn = 0
     lst_line = nil
     prev_line = {
@@ -87,22 +91,24 @@ module MT940_50
       abalsgn: '',
       abaldte: '',
       abal: ''
-    }
+      }
 
-    CSV.foreach(source_file, encoding:'iso-8859-1:utf-8') do |row|
+    CSV.foreach(source_file, encoding:'Windows-1252:utf-8') do |row|
       line = '' # Value that will eventually appended to file
       # Ignore the header
-      if (row[-2] && row[-2].upcase().gsub(' ', '') == 'REF4(MT940ONLY)') || 
+      if (row[-2] && row[-2].upcase().gsub(' ', '') == 'REF4(MT940ONLY)') ||
          (row[0] && row[0] == '')
         next
       # Script should stop if the column count is wrong
       elsif row.length != 27
-        raise Exception.new('Bad column count %d : %s' % [row.length, row.to_s])
+        raise Exception.new("Bad column count %d : %s" % [row.length, row.to_s])
       end
       # Convert user values to valid swift values
-      row = convert_values(row, dtf)
+      row = convert_values(row, options[:dtf])
       # Check to see whether a previous page should be closed.
-      if (prev_line[:stmtpg] != row[4] or prev_line[:account] != row[2]) and prev_line[:account] != ''
+      if (prev_line[:stmtpg] != row[4] ||
+          prev_line[:account] != row[2]) &&
+          prev_line[:account] != ''
         # Close the page: ":62F:D151015EUR1618033889"
         line = ":62%s:%s%s%s%s\n" % [prev_line[:cbaltyp],
                                      prev_line[:cbalsgn],
@@ -122,46 +128,46 @@ module MT940_50
       if prev_line[:sendbic] != row[0].upcase || prev_line[:recvbic] != row[1].upcase
         if prev_line[:sendbic] != ''
           # Not the first msg, so the last msg must be closed
-          if chk
-            line += "-}{5:{CHK:%s}}\n" % chk
+          if options[:chk]
+            line += "-}{5:{CHK:%s}}\n" % options[:chk]
           else
             line += "-}{5:}\n"
           end
         end
         # Open the next message
         # Create Basic Header
-        line += "{1:%s%s%s%s%s}" % [appid,
-                                    servid,
+        line += "{1:%s%s%s%s%s}" % [options[:appid],
+                                    options[:servid],
                                     row[0].ljust(12, 'X'),
-                                    session_no,
-                                    seqno]
+                                    options[:session_no],
+                                    options[:seqno]]
 
         # Create Application Header
-        if drctn == 'I' # Inward
-          line += "{2:I%s%s%s%s%s}" % [msg_type,
+        if options[:drctn] == 'I' # Inward
+          line += "{2:I%s%s%s%s%s}" % [options[:msg_type],
                                        row[1].ljust(12, 'X'),
-                                       msg_prty,
-                                       dlvt_mnty,
-                                       obs]
+                                       options[:msg_prty],
+                                       options[:dlvt_mnty],
+                                       options[:obs]]
         else #Outward
-          if mir == true
+          if options[:mir] == true
             # Auto generate the MIR
-            mir = Time.new.to_s.gsub('-','')[2..7] +
-                  row[0].ljust(12,'X') +
-                  session_no +
-                  seqno
+            options[:mir] = "%s%s%s%s" % [Time.new.to_s.gsub('-','')[2..7],
+                                          row[0].ljust(12,'X'),
+                                          options[:session_no],
+                                          options[:seqno]]
           end
           # Add the block
-          line += "{2:O%s%s%s%s%s%s}" % [msg_type,
-                                         inp_time,
-                                         mir,
-                                         out_date,
-                                         out_time,
-                                         msg_prty]
+          line += "{2:O%s%s%s%s%s%s}" % [options[:msg_typ],
+                                         options[:inp_time],
+                                         options[:mir],
+                                         options[:out_date],
+                                         options[:out_time],
+                                         options[:msg_prty]]
         end
         ## Create field 113 if present
-        f113 = !f113 ? '{113:%s}' % f113.to_s.rjust(4, '0') : ''
-        line += "{3:%s{118:%s}{4:\n" % [f113, mur]
+        options[:f113] = !options[:f113] ? '{113:%s}' % options[:f113].to_s.rjust(4, '0') : ''
+        line += "{3:%s{118:%s}{4:\n" % [options[:f113], options[:mur]]
       end
       # Check to see whether a new page should be opened.
       if prev_line[:stmtpg] != row[4] || prev_line[:account] != row[2]
@@ -197,7 +203,7 @@ module MT940_50
         line += "%s\n" % row[16]
       end
       # Add item Ref4 if present and 940
-      if msg_type == '940' && row[25].gsub(' ', '') != ''
+      if options[:msg_type] == '940' && row[25].gsub(' ', '') != ''
         line += ":86:%s\n" % row[25]
       end
 
@@ -233,15 +239,15 @@ module MT940_50
                                   lst_line[23]]
     end
     # Add checksum if present
-    if chk
-      line += "-}{5:{CHK:%s}}" % chk
+    if options[:chk]
+      line += "-}{5:{CHK:%s}}" % options[:chk]
     else
       line += "-}{5:}"
     end
     # Append the last line to file
     append_line_to_file(line, target_file)
 
-    puts 'MT%s created successfully.' % msg_type
+    puts "MT%s created successfully." % options[:msg_type]
 
   end
 
@@ -251,7 +257,7 @@ module MT940_50
   end
 
   ## Converts supplied values to swift MT equivalents for dates, amounts
-  def convert_values(xline, dtf_)
+  def convert_values(xline, dtf)
     xline.each_with_index.map do |val, idx|
       # If the value is nil, set it to an empty string
       val = !val ? '' : val
@@ -267,23 +273,29 @@ module MT940_50
         xline[idx] = val.gsub!('.', ',') || val
       when 7, 9, 10, 19, 22
         # Convert dates to YYMMDD
-        if val != ''
-          if dtf_ == 'DDMMYYYY'
-            xline[idx] = (val[8..9] + val[3..4] + val[0..1])
-          elsif dtf_ == 'MMDDYYYY'
-            xline[idx] = val[8..9] + val[0..1] + val[3..4]
-          else # YYYYMMDD
-            xline[idx] = val[2..3] + val[5..6] + val[8..9]
-          end
-        end
+        xline[idx] = date_string_to_iso8601(val, dtf)
         # Index 10 is the items entry date, format to MMDD
         val = xline[idx]
         xline[idx] = idx == 10 ? val[2..5] : val
       end
     end
-    
+
     return xline
 
   end
-  
+
+  def date_string_to_iso8601(value, dtf)
+    value = value.scan(/\d*/).join
+    if value.length == 8
+      if dtf == 'DDMMYYYY'
+        value = "%s%s%s" % [value[4, 4], value[2, 2], value[0, 2]]
+      elsif dtf_ == 'MMDDYYYY'
+        value = "%s%s%s" % [value[4, 4], value[0, 2], value[2, 2]]
+      end
+    end
+
+    return value
+
+  end
+
 end
