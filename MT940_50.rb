@@ -1,6 +1,5 @@
-require 'csv'
-
 module MT940_50
+  include 'csv'
   extend self
   ## Converts csv to swift MT9 cash statement message
   def gen_mt9(source_file, target_file, options={})=
